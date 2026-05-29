@@ -4,9 +4,26 @@ Desktop app for Leonardo AI image and video generation. Single binary, dark UI,
 cookie-pool based auth so you can rotate multiple Leonardo accounts without
 juggling API keys.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/hirotomasato/leostudio?display_name=tag&sort=semver)](https://github.com/hirotomasato/leostudio/releases/latest)
+[![WhatsApp Channel](https://img.shields.io/badge/WhatsApp-Join%20Channel-25D366?logo=whatsapp&logoColor=white)](https://whatsapp.com/channel/0029VakVntuKgsNz5QgqU30C)
+
 > Status: actively developed. Internal APIs may shift between minor versions.
 
-![dark mode](docs/screenshots/dark.png)
+<p align="center">
+  <img src="docs/screenshots/generate-video.png" alt="LeoStudio — Generate Video tab in dark mode" width="900">
+</p>
+
+## UI overview
+
+| Region | Purpose |
+|---|---|
+| Sidebar (Workspace) | Generate Image, Generate Video, Library |
+| Sidebar (Manage) | Cookies (pool), Models (catalog + custom UUIDs) |
+| Sidebar (footer) | Settings, About |
+| Topbar | Page title, live credit pill (auto-refreshed after each generate), theme switcher |
+| Compose panel | Prompt + per-model parameters (model, aspect ratio, resolution, duration, audio toggle, reference frames) |
+| Result panel | Inline preview of the latest output, with replay-to-prompt and save-to-disk shortcuts |
 
 ## Features
 
@@ -120,19 +137,25 @@ POST /v1/videos/generations
 
 ## Cookie setup
 
-1. Install the ExLeo browser extension (separate repo) to export your full
-   Leonardo cookie string.
-2. In LeoStudio, open the Cookies tab and paste the cookie. The format is:
+1. Get the ExLeo browser extension from the [WhatsApp channel](https://whatsapp.com/channel/0029VakVntuKgsNz5QgqU30C).
+   The latest build is pinned in the channel description, along with install
+   instructions for Chrome / Edge / Brave.
+2. Open Leonardo AI in your browser, log in, then click the ExLeo icon to
+   copy the full cookie string to your clipboard.
+3. In LeoStudio, open the **Cookies** tab and paste it. The format is:
 
 ```
 cookie=__Secure-better-auth.session_data.0=...; ...
 token=eyJ...   (optional fallback bearer)
 ```
 
-3. The backend validates the cookie against Leonardo and stores it only if
+4. The backend validates the cookie against Leonardo and stores it only if
    it resolves to a usable JWT. Balance and email are populated automatically.
-4. From this point on, every generate request rotates through active cookies
+5. From this point on, every generate request rotates through active cookies
    and auto-disables ones that expire or run out of credit.
+
+> Tip: paste cookies from multiple Leonardo accounts to build a rotation pool.
+> LeoStudio picks the next active cookie automatically and skips depleted ones.
 
 ## Data location
 
@@ -152,9 +175,15 @@ Override with `LEOSTUDIO_DATA_DIR=/some/path`.
 - **Frontend**: React 18, Vite 5, TypeScript, Tailwind 3, lucide-react icons,
   shadcn/ui inspired primitives.
 
+## Community
+
+Get release announcements, model updates, and tips on the official channel:
+
+[![WhatsApp Channel](https://img.shields.io/badge/WhatsApp%20Channel-Follow-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com/channel/0029VakVntuKgsNz5QgqU30C)
+
 ## License
 
-MIT, see LICENSE.
+[MIT](LICENSE) © hirotomasato
 
 ## Author
 
