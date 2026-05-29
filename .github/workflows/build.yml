@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: leostudio/desktop/frontend/package-lock.json
+          cache-dependency-path: desktop/frontend/package-lock.json
 
       - name: Install Linux dev libs
         if: runner.os == 'Linux'
@@ -64,7 +64,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build (${{ matrix.platform }})
-        working-directory: leostudio/desktop
+        working-directory: desktop
         env:
           WAILS_TAGS: ${{ matrix.wails-tags }}
         run: |
@@ -77,14 +77,14 @@ jobs:
 
       - name: Package macOS app
         if: runner.os == 'macOS'
-        working-directory: leostudio/desktop/build/bin
+        working-directory: desktop/build/bin
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             leostudio-desktop.app ../../../${{ matrix.artifact }}
 
       - name: Rename Linux/Windows artifact
         if: runner.os != 'macOS'
-        working-directory: leostudio/desktop
+        working-directory: desktop
         shell: bash
         run: cp "${{ matrix.built }}" "../${{ matrix.artifact }}"
 
@@ -92,7 +92,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: leostudio/${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
 
   release:
     name: Publish release
