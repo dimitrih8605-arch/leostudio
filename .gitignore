@@ -1,0 +1,57 @@
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+
+# Wails / desktop build artifacts
+desktop/build/bin/
+desktop/build/darwin/build/
+desktop/build/windows/installer/
+desktop/build/.lastbuild
+
+# Frontend build artifacts
+desktop/frontend/dist/
+desktop/frontend/node_modules/
+desktop/frontend/.vite/
+desktop/frontend/*.tsbuildinfo
+
+# Generated files derived from build (kept ignored to avoid committing transient artifacts)
+desktop/frontend/vite.config.d.ts
+desktop/frontend/vite.config.js
+
+# Wails generated bindings (regenerated on every dev/build)
+desktop/frontend/src/wailsjs/
+desktop/frontend/wailsjs/
+
+# Wails build cache marker
+desktop/frontend/package.json.md5
+
+# Local data
+/data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Kiro local cache
+.kiro/cache/
