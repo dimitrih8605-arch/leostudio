@@ -136,6 +136,26 @@ func (s *Store) initSchema() error {
 			error_message TEXT DEFAULT '',
 			created_at INTEGER NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS queue_jobs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT NOT NULL,
+			status TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			model_id TEXT DEFAULT '',
+			aspect_ratio TEXT DEFAULT '',
+			resolution TEXT DEFAULT '',
+			duration INTEGER DEFAULT 0,
+			audio INTEGER DEFAULT 0,
+			quantity INTEGER DEFAULT 1,
+			ref_image_ids_json TEXT DEFAULT '[]',
+			result_urls_json TEXT DEFAULT '[]',
+			thumb_urls_json TEXT DEFAULT '[]',
+			used_cookie_id INTEGER DEFAULT 0,
+			generation_id TEXT DEFAULT '',
+			error_message TEXT DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
 	}
 	for _, q := range stmts {
 		if _, err := s.db.Exec(q); err != nil {

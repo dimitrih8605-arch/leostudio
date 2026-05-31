@@ -149,6 +149,46 @@ export type ModelSyncResult = {
   Sample: string[];
 };
 
+export type QueueJobType = "image" | "video";
+export type QueueJobStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type QueueJobSpec = {
+  type: QueueJobType;
+  prompt: string;
+  modelId: string; // image modelId / video slug
+  aspectRatio: string;
+  resolution?: string; // video only
+  duration?: number; // video only
+  audio?: boolean; // video only
+  quantity?: number; // image only
+  refImageIds?: string[]; // pre-uploaded init image ids
+};
+
+export type QueueJob = {
+  id: number;
+  type: QueueJobType;
+  status: QueueJobStatus;
+  prompt: string;
+  modelId: string;
+  aspectRatio: string;
+  resolution: string;
+  duration: number;
+  audio: boolean;
+  quantity: number;
+  resultUrls: string[];
+  thumbUrls: string[];
+  usedCookieId: number;
+  generationId: string;
+  error: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 function bindings() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
@@ -207,6 +247,15 @@ export const api = {
   // Library
   listGenerationLogs: (limit: number): Promise<GenerationLog[]> =>
     bindings().ListGenerationLogs(limit),
+
+  // Generation queue
+  enqueueJobs: (specs: QueueJobSpec[]): Promise<number[]> =>
+    bindings().EnqueueJobs(specs),
+  listQueueJobs: (): Promise<QueueJob[]> => bindings().ListQueueJobs(),
+  cancelQueueJob: (id: number): Promise<void> => bindings().CancelQueueJob(id),
+  retryQueueJob: (id: number): Promise<void> => bindings().RetryQueueJob(id),
+  clearFinishedQueueJobs: (): Promise<void> =>
+    bindings().ClearFinishedQueueJobs(),
 
   // Filesystem dialogs
   openDirectoryDialog: (currentPath: string): Promise<string> =>

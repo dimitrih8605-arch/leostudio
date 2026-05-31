@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Info,
+  ListChecks,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 export type NavId =
   | "image"
   | "video"
+  | "queue"
   | "library"
   | "cookies"
   | "models"
@@ -38,6 +40,7 @@ const GROUPS: Array<{ heading: string; items: NavItem[] }> = [
     items: [
       { id: "image", label: "Generate Image", icon: ImageIcon },
       { id: "video", label: "Generate Video", icon: Video },
+      { id: "queue", label: "Queue", icon: ListChecks },
       { id: "library", label: "Library", icon: Library },
     ],
   },

@@ -5,6 +5,7 @@ import { AboutDialog } from "@/components/about-dialog";
 import { BalancePill } from "@/components/balance-pill";
 import { GenerateImagePage } from "@/pages/generate-image";
 import { GenerateVideoPage } from "@/pages/generate-video";
+import { QueuePage } from "@/pages/queue";
 import { LibraryPage } from "@/pages/library";
 import { CookiesPage } from "@/pages/cookies";
 import { ModelsPage } from "@/pages/models";
@@ -12,7 +13,7 @@ import { SettingsPage } from "@/pages/settings";
 
 // Pages that should show the balance pill in the topbar — only the ones
 // that consume credits.
-const BALANCE_PAGES = new Set<NavId>(["image", "video"]);
+const BALANCE_PAGES = new Set<NavId>(["image", "video", "queue"]);
 
 const PAGE_META: Record<NavId, { title: string; render: (ctx: PageContext) => JSX.Element }> = {
   image: {
@@ -22,6 +23,10 @@ const PAGE_META: Record<NavId, { title: string; render: (ctx: PageContext) => JS
   video: {
     title: "Generate Video",
     render: () => <GenerateVideoPage />,
+  },
+  queue: {
+    title: "Queue",
+    render: () => <QueuePage />,
   },
   library: {
     title: "Library",

@@ -25,6 +25,7 @@ type App struct {
 	ctx     context.Context
 	store   *store.Store
 	service *service.LeonardoPool
+	queue   *service.QueueManager
 }
 
 // NewApp constructs the app, opening the SQLite store and bootstrapping defaults.
@@ -54,6 +55,7 @@ func NewApp() *App {
 	return &App{
 		store:   st,
 		service: svc,
+		queue:   service.NewQueueManager(svc, st, 0),
 	}
 }
 
@@ -61,6 +63,22 @@ func NewApp() *App {
 // context which we'll later use for events and window controls.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Wire the generation queue: emit a frontend event on every job change, and
+	// refresh balances when jobs finish. Then resume any persisted jobs and
+	// start the worker pool.
+	if a.queue != nil {
+		a.queue.SetOnChange(func() {
+			if a.ctx != nil {
+				wailsruntime.EventsEmit(a.ctx, "queue:changed")
+			}
+			// A finished job spends credits; nudge the balance UI too.
+			a.emitCookiesChanged()
+		})
+		a.queue.Start()
+		go func() { _ = a.queue.ResumeFromStore() }()
+	}
+
 	// Best-effort first-run sync: if the user already added cookies but the
 	// models table is empty, populate it from Leonardo so Generate Image is
 	// usable immediately. Failures stay silent — the Models tab has a manual
@@ -387,6 +405,131 @@ func (a *App) emitCookiesChanged() {
 		return
 	}
 	wailsruntime.EventsEmit(a.ctx, "cookies:changed")
+}
+
+// ----- Generation queue ----------------------------------------------------
+
+// QueueJobSpecDTO is one job the frontend wants to enqueue.
+type QueueJobSpecDTO struct {
+	Type        string   `json:"type"` // "image" | "video"
+	Prompt      string   `json:"prompt"`
+	ModelID     string   `json:"modelId"`     // image modelId / video slug
+	AspectRatio string   `json:"aspectRatio"`
+	Resolution  string   `json:"resolution"`  // video only
+	Duration    int      `json:"duration"`    // video only
+	Audio       bool     `json:"audio"`       // video only
+	Quantity    int      `json:"quantity"`    // image only
+	RefImageIDs []string `json:"refImageIds"` // pre-uploaded init image ids
+}
+
+// QueueJobDTO is the JSON-friendly view of a queued job sent to the UI.
+type QueueJobDTO struct {
+	ID           int64    `json:"id"`
+	Type         string   `json:"type"`
+	Status       string   `json:"status"`
+	Prompt       string   `json:"prompt"`
+	ModelID      string   `json:"modelId"`
+	AspectRatio  string   `json:"aspectRatio"`
+	Resolution   string   `json:"resolution"`
+	Duration     int      `json:"duration"`
+	Audio        bool     `json:"audio"`
+	Quantity     int      `json:"quantity"`
+	ResultURLs   []string `json:"resultUrls"`
+	ThumbURLs    []string `json:"thumbUrls"`
+	UsedCookieID int64    `json:"usedCookieId"`
+	GenerationID string   `json:"generationId"`
+	Error        string   `json:"error"`
+	CreatedAt    int64    `json:"createdAt"`
+	UpdatedAt    int64    `json:"updatedAt"`
+}
+
+// EnqueueJobs adds one or more jobs to the generation queue and returns their
+// new ids. Jobs are processed in the background by the worker pool.
+func (a *App) EnqueueJobs(specs []QueueJobSpecDTO) ([]int64, error) {
+	if a.queue == nil {
+		return nil, fmt.Errorf("queue not initialized")
+	}
+	out := make([]service.JobSpec, 0, len(specs))
+	for _, s := range specs {
+		jobType := service.JobImage
+		if s.Type == "video" {
+			jobType = service.JobVideo
+		}
+		out = append(out, service.JobSpec{
+			Type:        jobType,
+			Prompt:      strings.TrimSpace(s.Prompt),
+			ModelID:     strings.TrimSpace(s.ModelID),
+			AspectRatio: s.AspectRatio,
+			Resolution:  s.Resolution,
+			Duration:    s.Duration,
+			Audio:       s.Audio,
+			Quantity:    s.Quantity,
+			RefImageIDs: s.RefImageIDs,
+		})
+	}
+	return a.queue.Enqueue(out)
+}
+
+// ListQueueJobs returns all jobs (pending/running/finished), oldest first.
+func (a *App) ListQueueJobs() ([]QueueJobDTO, error) {
+	if a.queue == nil {
+		return nil, fmt.Errorf("queue not initialized")
+	}
+	jobs := a.queue.List()
+	out := make([]QueueJobDTO, 0, len(jobs))
+	for _, j := range jobs {
+		out = append(out, QueueJobDTO{
+			ID:           j.ID,
+			Type:         string(j.Type),
+			Status:       string(j.Status),
+			Prompt:       j.Prompt,
+			ModelID:      j.ModelID,
+			AspectRatio:  j.AspectRatio,
+			Resolution:   j.Resolution,
+			Duration:     j.Duration,
+			Audio:        j.Audio,
+			Quantity:     j.Quantity,
+			ResultURLs:   orEmptyStrings(j.ResultURLs),
+			ThumbURLs:    orEmptyStrings(j.ThumbURLs),
+			UsedCookieID: j.UsedCookieID,
+			GenerationID: j.GenerationID,
+			Error:        j.Error,
+			CreatedAt:    j.CreatedAt,
+			UpdatedAt:    j.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
+// CancelQueueJob cancels a pending job. Running jobs cannot be canceled.
+func (a *App) CancelQueueJob(id int64) error {
+	if a.queue == nil {
+		return fmt.Errorf("queue not initialized")
+	}
+	return a.queue.Cancel(id)
+}
+
+// RetryQueueJob re-queues a failed or canceled job.
+func (a *App) RetryQueueJob(id int64) error {
+	if a.queue == nil {
+		return fmt.Errorf("queue not initialized")
+	}
+	return a.queue.Retry(id)
+}
+
+// ClearFinishedQueueJobs removes completed/failed/canceled jobs.
+func (a *App) ClearFinishedQueueJobs() error {
+	if a.queue == nil {
+		return fmt.Errorf("queue not initialized")
+	}
+	return a.queue.ClearFinished()
+}
+
+func orEmptyStrings(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
 
 // ----- Filesystem dialogs --------------------------------------------------

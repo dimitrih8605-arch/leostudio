@@ -355,9 +355,10 @@ func stripQuery(rawURL string) string {
 //  1. Resolve from cookie payload via Leonardo client (always preferred).
 //  2. Use parsed `token=...` line if it is fresh + likely Leonardo.
 //  3. Use raw value as JWT if it qualifies.
+
 // ResolveToken resolves a usable bearer JWT from a raw stored auth value
-// (the same "cookie=...\ntoken=..." format the desktop app persists), using
-// the given Leonardo client. It reuses the exact desktop resolution path and
+// (the "cookie=...\ntoken=..." format the desktop app persists) using the
+// given Leonardo client. It reuses the exact desktop resolution path and
 // touches no store, so the mobile binding can reproduce desktop behaviour
 // without a database.
 func ResolveToken(api *leonardo.Client, rawAuthValue string) string {
