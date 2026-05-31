@@ -56,6 +56,26 @@ export function CookiesPage() {
     void reload();
   });
 
+  // Periodic auto-refresh: while the Cookies page is open, re-fetch every
+  // cookie's balance from Leonardo so the pool always reflects live numbers
+  // without the user clicking Refresh. Silent + best-effort; skipped while a
+  // manual refresh is in flight to avoid overlapping calls.
+  useEffect(() => {
+    const POLL_MS = 60_000;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      void (async () => {
+        try {
+          await api.refreshCookieProfiles();
+          await reload();
+        } catch {
+          /* ignore transient refresh errors */
+        }
+      })();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [reload]);
+
   const onAdd = async () => {
     const value = rawCookie.trim();
     if (!value) {

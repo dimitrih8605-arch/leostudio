@@ -209,6 +209,8 @@ func (p *LeonardoPool) GenerateVideo(req VideoRequest) (*VideoResponse, error) {
 			}
 
 			_ = p.store.MarkCookieUsed(cookie.ID)
+			// Re-sync balance after spending credits so the UI updates.
+			p.refreshBalanceAfterUse(cookie.ID, token)
 
 			// Auto-save mp4 + thumbnail when enabled. Same setting key as image
 			// save flow so operators only configure one directory.

@@ -162,7 +162,7 @@ export function GenerateVideoPage() {
   const maxDuration = Math.max(...(selectedModel?.durationOptions ?? [15]));
 
   return (
-    <div className="grid h-full grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[420px_1fr]">
+    <div className="grid h-full grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[420px_minmax(0,1fr)]">
       <Card className="self-start lg:max-h-full lg:overflow-y-auto">
         <div className="flex items-center gap-2 p-5 pb-3">
           <Wand2 className="h-4 w-4 text-primary" />
@@ -375,6 +375,15 @@ function videoAspectClass(aspect: string): string {
   }
 }
 
+// A single, fixed container width used by BOTH the skeleton and the finished
+// player so the panel never jumps or widens when the result arrives. Portrait
+// clips get a narrower box so they don't tower over the panel; everything else
+// shares one compact, Library-style size.
+function videoBoxWidth(aspect: string): string {
+  const portrait = aspect === "9:16" || aspect === "3:4" || aspect === "9:21";
+  return portrait ? "max-w-[220px]" : "max-w-sm";
+}
+
 function VideoPlayer({
   url,
   thumb,
@@ -389,18 +398,10 @@ function VideoPlayer({
   onPreview: () => void;
 }) {
   const ratio = videoAspectClass(aspect);
-  // Constrain width per aspect ratio so portrait clips don't stretch into a
-  // tiny thumbnail and landscape clips fill the panel.
-  const portrait = aspect === "9:16" || aspect === "3:4" || aspect === "9:21";
-  const square = aspect === "1:1";
-  const maxWidth = portrait
-    ? "max-w-md"
-    : square
-    ? "max-w-xl"
-    : "max-w-3xl";
+  const boxWidth = videoBoxWidth(aspect);
 
   return (
-    <div className={`w-full ${maxWidth} overflow-hidden rounded-lg border border-border bg-background/40`}>
+    <div className={`w-full ${boxWidth} overflow-hidden rounded-lg border border-border bg-background/40`}>
       <div className={`relative w-full bg-black ${ratio}`}>
         <video
           controls
@@ -424,14 +425,14 @@ function VideoPlayer({
           Preview
         </button>
       </div>
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-muted-foreground">
-        <span className="truncate">{url}</span>
+      <div className="flex items-center justify-end px-3 py-2">
         <button
           type="button"
           onClick={onPreview}
-          className="text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
         >
-          Download
+          <Maximize2 className="h-3 w-3" />
+          Open
         </button>
       </div>
     </div>
@@ -440,23 +441,23 @@ function VideoPlayer({
 
 function VideoSkeleton({ duration, aspect }: { duration: number; aspect: string }) {
   const ratio = videoAspectClass(aspect);
-  const portrait = aspect === "9:16" || aspect === "3:4" || aspect === "9:21";
-  const square = aspect === "1:1";
-  const maxWidth = portrait ? "max-w-md" : square ? "max-w-xl" : "max-w-3xl";
+  const boxWidth = videoBoxWidth(aspect);
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className={`relative w-full ${maxWidth}`}>
-        <Skeleton className={`w-full ${ratio} rounded-lg`} />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <p className="text-xs text-muted-foreground">
-            Rendering {duration}s clip
-          </p>
+    <div className="flex flex-col items-center gap-4">
+      {/* Same width + aspect as the finished player so nothing shifts. */}
+      <div className={`w-full ${boxWidth} overflow-hidden rounded-lg border border-border bg-background/40`}>
+        <div className={`relative w-full ${ratio}`}>
+          <Skeleton className="absolute inset-0 h-full w-full rounded-none" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-xs text-muted-foreground">
+              Rendering {duration}s clip
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="flex w-full max-w-3xl items-center gap-2">
-        <Skeleton className="h-3 w-32" />
-        <Skeleton className="h-3 w-16" />
+        <div className="flex items-center justify-end px-3 py-2">
+          <Skeleton className="h-3 w-12" />
+        </div>
       </div>
     </div>
   );
@@ -493,7 +494,7 @@ function Field({
 
 function GenerateVideoSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[420px_1fr]">
+    <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[420px_minmax(0,1fr)]">
       <Card>
         <div className="space-y-4 p-5">
           <Skeleton className="h-5 w-24" />

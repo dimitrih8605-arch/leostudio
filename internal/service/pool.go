@@ -229,6 +229,9 @@ func (p *LeonardoPool) Generate(req GenerateRequest) (*GenerateResponse, error) 
 			}
 
 			_ = p.store.MarkCookieUsed(cookie.ID)
+			// Re-sync balance now that credits were spent, so the UI shows the
+			// updated number after the post-generate cookies:changed event.
+			p.refreshBalanceAfterUse(cookie.ID, token)
 
 			autoSaveEnabled := false
 			if v, _ := p.store.GetSetting("auto_save_images", "0"); v == "1" {
@@ -291,6 +294,17 @@ func (p *LeonardoPool) Generate(req GenerateRequest) (*GenerateResponse, error) 
 	return nil, newPublicError(503, detail)
 }
 
+// refreshBalanceAfterUse re-fetches the cookie's balance right after a
+// successful generation so the UI reflects spent credits immediately. The
+// generate loop fetches balance BEFORE generating (to gate on >0 credits), so
+// without this the stored balance would stay at its pre-generation value.
+// Best-effort: any error is ignored because the generation itself succeeded.
+func (p *LeonardoPool) refreshBalanceAfterUse(cookieID int64, token string) {
+	if info, err := p.api.GetUserInfo(token); err == nil {
+		_ = p.store.UpdateCookieProfile(cookieID, info.Email, info.Tokens)
+	}
+}
+
 func orEmpty(s []string) []string {
 	if s == nil {
 		return []string{}
@@ -341,6 +355,15 @@ func stripQuery(rawURL string) string {
 //  1. Resolve from cookie payload via Leonardo client (always preferred).
 //  2. Use parsed `token=...` line if it is fresh + likely Leonardo.
 //  3. Use raw value as JWT if it qualifies.
+// ResolveToken resolves a usable bearer JWT from a raw stored auth value
+// (the same "cookie=...\ntoken=..." format the desktop app persists), using
+// the given Leonardo client. It reuses the exact desktop resolution path and
+// touches no store, so the mobile binding can reproduce desktop behaviour
+// without a database.
+func ResolveToken(api *leonardo.Client, rawAuthValue string) string {
+	return (&LeonardoPool{api: api}).resolveToken(rawAuthValue)
+}
+
 func (p *LeonardoPool) resolveToken(rawAuthValue string) string {
 	value := strings.TrimSpace(rawAuthValue)
 	token, cookie := extractAuthParts(value)
