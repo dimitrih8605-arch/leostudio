@@ -492,10 +492,14 @@ func (c *Client) CreateGeneration(token string, in GenerateInput) (string, error
 	sd := strings.ToUpper(strings.TrimSpace(in.SDVersion))
 	if sd == "GPT_IMAGE_2" || sd == "GPT_IMAGE_1" {
 		params["quality"] = "low"
-		delete(params, "style_ids")
 		delete(params, "guidance_scale")
 		delete(params, "num_inference_steps")
 		delete(params, "prompt_enhance")
+	}
+	// Models that don't accept style/size params (per Hermes verification).
+	if sd == "IDEOGRAM_4" || sd == "RECRAFT_V4" || sd == "RECRAFT_V4_PRO" {
+		delete(params, "style_ids")
+		delete(params, "dimensions")
 	}
 
 	if len(in.InitImageIDs) > 0 {
