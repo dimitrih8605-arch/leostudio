@@ -102,6 +102,23 @@ func (s *Store) GetModelByModelID(modelID string) (*Model, error) {
 	return &m, err
 }
 
+
+// GetModelByName looks up a row by display name (case-insensitive).
+func (s *Store) GetModelByName(name string) (*Model, error) {
+	var m Model
+	err := s.db.QueryRow(
+		"SELECT id, name, model_id, sd_version, is_default, created_at FROM models WHERE LOWER(name) = LOWER(?)",
+		name,
+	).Scan(&m.ID, &m.Name, &m.ModelID, &m.SDVersion, &m.IsDefault, &m.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("store: get model by name: %w", err)
+	}
+	return &m, nil
+}
+
 // GetSDVersion returns the sd_version associated with a model UUID, or "".
 func (s *Store) GetSDVersion(modelID string) (string, error) {
 	var sdVersion sql.NullString
@@ -137,6 +154,25 @@ func (s *Store) UpsertModel(name, modelID, sdVersion string) error {
 		   name = excluded.name,
 		   sd_version = excluded.sd_version`,
 		name, modelID, sdVersion, nowTS(),
+	)
+	return err
+}
+
+// DeleteModelsNotIn deletes any model whose model_id is not in the keep list.
+// Used by sync to purge stale rows that Leonardo no longer returns.
+func (s *Store) DeleteModelsNotIn(keepIDs []string) error {
+	if len(keepIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(keepIDs))
+	args := make([]any, len(keepIDs))
+	for i, id := range keepIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	_, err := s.db.Exec(
+		"DELETE FROM models WHERE model_id NOT IN ("+strings.Join(placeholders, ",")+")",
+		args...,
 	)
 	return err
 }

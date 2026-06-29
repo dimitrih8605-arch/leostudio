@@ -34,6 +34,7 @@ type GenerateInput struct {
 	Quantity     int
 	InitImageIDs []string
 	SDVersion    string
+	StyleID      string // Leonardo style UUID, empty = use default (Dynamic)
 }
 
 // GetUserInfo returns email + total tokens for the bearer token.
@@ -317,6 +318,161 @@ func (c *Client) uploadImageBytes(token string, content []byte, ext string) (str
 	return "", fmt.Errorf("leonardo: moderation timeout")
 }
 
+
+// modelSlugMap maps display names to Leonardo GraphQL model slugs.
+// The request.model field in the GraphQL mutation requires a slug, not a UUID.
+var modelSlugMap = map[string]string{
+	"nano-banana-2":       "nano-banana-2",
+	"nano banana 2":       "nano-banana-2",
+	"nano-banana-pro":     "nano-banana-pro",
+	"nano banana pro":     "nano-banana-pro",
+	"gpt-image-2":         "gpt-image-2",
+	"gpt image-2":         "gpt-image-2",
+	"gpt image 2":         "gpt-image-2",
+	"gpt-image-1.5":       "gpt-image-1.5",
+	"gpt image-1.5":       "gpt-image-1.5",
+	"gpt image 1.5":       "gpt-image-1.5",
+	"gpt-image-1":         "gpt-image-1",
+	"gpt image-1":         "gpt-image-1",
+	"gpt image 1":         "gpt-image-1",
+	"lucid-origin":        "lucid-origin",
+	"lucid origin":        "lucid-origin",
+	"lucid-realism":       "lucid-realism",
+	"lucid realism":       "lucid-realism",
+	"flux-pro-2.0":        "flux-pro-2.0",
+	"flux.2 pro":          "flux-pro-2.0",
+	"flux-pro-2":          "flux-pro-2.0",
+	"flux-kontext-pro":    "flux-kontext-pro",
+	"flux.1 kontext":      "flux-kontext-pro",
+	"flux.1 kontext max":  "flux-kontext-pro",
+	"flux-max":            "flux-kontext-pro",
+	"flux-dev":            "flux-dev",
+	"flux dev":            "flux-dev",
+	"flux-dev-2.0":        "flux-dev-2.0",
+	"flux.2 dev":          "flux-dev-2.0",
+	"flux-schnell":        "flux-schnell",
+	"flux schnell":        "flux-schnell",
+	"flux-omni":           "flux-kontext-pro",
+	"seedream-4.5":        "seedream-4.5",
+	"seedream 4.5":        "seedream-4.5",
+	"seedream-4.0":        "seedream-4.0",
+	"seedream 4":          "seedream-4.0",
+	"seedream 4.0":        "seedream-4.0",
+	"phoenix-1.0":         "phoenix-1.0",
+	"phoenix 1.0":         "phoenix-1.0",
+	"phoenix-0.9":         "phoenix-0.9",
+	"phoenix 0.9":         "phoenix-0.9",
+	"phoenix":             "phoenix-1.0",
+	"ideogram-v4.0":       "ideogram-v4.0",
+	"ideogram 4.0":        "ideogram-v4.0",
+	"ideogram-3":          "ideogram-3.0",
+	"ideogram 3.0":        "ideogram-3.0",
+	"recraft-v4":          "recraft-v4",
+	"recraft v4":          "recraft-v4",
+	"recraft-v4-pro":      "recraft-v4-pro",
+	"recraft v4 pro":      "recraft-v4-pro",
+	"recraft_v4_pro":      "recraft-v4-pro",
+	"kino-2-1":            "lucid-origin",
+	"kino_2_1":            "lucid-origin",
+	"kino-2-0":            "lucid-realism",
+	"kino_2_0":            "lucid-realism",
+	"gemini-image-2":      "nano-banana-pro",
+	"gemini_image_2":      "nano-banana-pro",
+	"gemini-2-5-flash":    "nano-banana",
+	"gemini_2_5_flash":    "nano-banana",
+	"nano-banana":         "nano-banana",
+	"nano banana":         "nano-banana",
+}
+
+// defaultStyleID is "Dynamic" — used when no style is specified.
+const defaultStyleID = "111dc692-d470-4eec-b791-3475abac4c46"
+
+// styleNameToUUID maps human-readable style names to Leonardo UUIDs.
+var styleNameToUUID = map[string]string{
+	"none":         "556c1ee5-ec38-42e8-955a-1e82dad0ffa1",
+	"cinematic":    "a5632c7c-ddbb-4e2f-ba34-8456ab3ac436",
+	"creative":     "6fedbf1f-4a17-45ec-84fb-92fe524a29ef",
+	"dynamic":      "111dc692-d470-4eec-b791-3475abac4c46",
+	"fashion":      "594c4a08-a522-4e0e-b7ff-e4dac4b6b622",
+	"portrait":     "ab5a4220-7c42-41e5-a578-eddb9fed3d75",
+	"stock photo":  "5bdc3f2a-1be6-4d1c-8e77-992a30824a2c",
+	"stock-photo":  "5bdc3f2a-1be6-4d1c-8e77-992a30824a2c",
+	"vibrant":      "dee282d3-891f-4f73-ba02-7f8131e5541b",
+}
+
+// resolveStyleID converts a style name or UUID to a Leonardo style UUID.
+// Empty input returns the default (Dynamic).
+func resolveStyleID(style string) string {
+	style = strings.ToLower(strings.TrimSpace(style))
+	if style == "" {
+		return defaultStyleID
+	}
+	if id, ok := styleNameToUUID[style]; ok {
+		return id
+	}
+	// Assume it's already a UUID
+	return style
+}
+
+// resolveModelSlug converts a display name, UUID, or SDVersion to a Leonardo GraphQL slug.
+// Falls back to "nano-banana-2" if no mapping found.
+func resolveModelSlug(modelID, sdVersion string) string {
+	// If it's already a slug (contains no spaces, lowercase with hyphens), use as-is
+	if strings.Contains(modelID, "-") && !strings.Contains(modelID, " ") {
+		return modelID
+	}
+	// Try display name lookup (case-insensitive)
+	lower := strings.ToLower(strings.TrimSpace(modelID))
+	if slug, ok := modelSlugMap[lower]; ok {
+		return slug
+	}
+	// Try SDVersion-based fallback
+	sdUpper := strings.ToUpper(strings.TrimSpace(sdVersion))
+	switch sdUpper {
+	case "GPT_IMAGE_2":
+		return "gpt-image-2"
+	case "GPT_IMAGE_1":
+		return "gpt-image-1"
+	case "IDEOGRAM_4":
+		return "ideogram-v4.0"
+	case "IDEOGRAM_3":
+		return "ideogram-3.0"
+	case "RECRAFT_V4_PRO":
+		return "recraft-v4-pro"
+	case "RECRAFT_V4":
+		return "recraft-v4"
+	case "NANO_BANANA_2":
+		return "nano-banana-2"
+	case "NANO_BANANA_PRO", "GEMINI_IMAGE_2":
+		return "nano-banana-pro"
+	case "GEMINI_2_5_FLASH", "NANO_BANANA":
+		return "nano-banana"
+	case "SEEDREAM_4_5":
+		return "seedream-4.5"
+	case "SEEDREAM_4_0":
+		return "seedream-4.0"
+	case "FLUX_PRO_2_0":
+		return "flux-pro-2.0"
+	case "FLUX_DEV_2_0":
+		return "flux-dev-2.0"
+	case "FLUX_DEV":
+		return "flux-dev"
+	case "FLUX":
+		return "flux-schnell"
+	case "FLUX_OMNI", "FLUX_MAX":
+		return "flux-kontext-pro"
+	case "PHOENIX":
+		return "phoenix-1.0"
+	case "KINO_2_1":
+		return "lucid-origin"
+	case "KINO_2_0":
+		return "lucid-realism"
+	case "SDXL_LIGHTNING", "SDXL_0_9", "SDXL_1_0":
+		return "phoenix-0.9"
+	}
+	return "nano-banana-2" // safe default
+}
+
 // CreateGeneration submits a Generate mutation and returns the generation ID.
 func (c *Client) CreateGeneration(token string, in GenerateInput) (string, error) {
 	params := map[string]any{
@@ -324,7 +480,7 @@ func (c *Client) CreateGeneration(token string, in GenerateInput) (string, error
 		"height":              in.Height,
 		"prompt":              strings.TrimSpace(in.Prompt),
 		"quantity":            in.Quantity,
-		"style_ids":           []string{"111dc692-d470-4eec-b791-3475abac4c46"},
+		"style_ids":           []string{resolveStyleID(in.StyleID)},
 		"prompt_enhance":      "ON",
 		"dimensions":          fmt.Sprintf("%dx%d", in.Width, in.Height),
 		"modelId":             in.ModelID,
@@ -456,8 +612,21 @@ func (c *Client) GetImageURLs(token, genID string) ([]string, error) {
 	return out, nil
 }
 
+// isAuthErrorPoll detects auth failures during polling (JWT expired, 401, etc).
+func isAuthErrorPoll(msg string) bool {
+	lower := strings.ToLower(strings.TrimSpace(msg))
+	return strings.Contains(lower, "jwt expired") ||
+		strings.Contains(lower, "token expired") ||
+		strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "401") ||
+		strings.Contains(lower, "invalid token") ||
+		strings.Contains(lower, "invalid bearer")
+}
+
 // WaitForCompletion polls until the generation finishes, errors, or times out.
-func (c *Client) WaitForCompletion(token, genID string, timeout, pollInterval time.Duration) GenerationResult {
+// If tokenRefresh is non-nil and a poll fails with an auth error, it is called
+// to obtain a fresh token before the next attempt.
+func (c *Client) WaitForCompletion(token, genID string, timeout, pollInterval time.Duration, tokenRefresh func() string) GenerationResult {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		status, err := c.PollStatus(token, genID)
@@ -468,6 +637,10 @@ func (c *Client) WaitForCompletion(token, genID string, timeout, pollInterval ti
 				return GenerationResult{Success: true, Images: images}
 			case "FAILED", "ERROR":
 				return GenerationResult{Success: false, Error: "generation failed"}
+			}
+		} else if tokenRefresh != nil && isAuthErrorPoll(err.Error()) {
+			if fresh := tokenRefresh(); fresh != "" {
+				token = fresh
 			}
 		}
 		time.Sleep(pollInterval)
@@ -498,98 +671,58 @@ type CustomModelEntry struct {
 	Type      string
 }
 
-// FetchOfficialImageModels returns Leonardo's official (username = "Leonardo")
-// image models. We try GraphQL queries that have historically been valid;
-// the first one that returns a non-empty list wins.
+// FetchOfficialImageModels returns Leonardo's official GENERATE-type image
+// models via the custom_models GraphQL endpoint.
 func (c *Client) FetchOfficialImageModels(token string) ([]CustomModelEntry, error) {
-	queries := []gqlPayload{
-		{
-			OperationName: "GetFeedModels",
-			Variables: map[string]any{
-				"where": map[string]any{
-					"public": map[string]any{"_eq": true},
-					"status": map[string]any{"_eq": "COMPLETE"},
-				},
-				"limit":  200,
-				"offset": 0,
+	resp, err := c.gql(token, gqlPayload{
+		OperationName: "GetFeedModels",
+		Variables: map[string]any{
+			"where": map[string]any{
+				"public": map[string]any{"_eq": true},
+				"status": map[string]any{"_eq": "COMPLETE"},
+				"type":   map[string]any{"_eq": "GENERATE"},
 			},
-			Query: `query GetFeedModels($where: custom_models_bool_exp = {}, $limit: Int, $offset: Int) {
+			"limit":  200,
+			"offset": 0,
+		},
+		Query: `query GetFeedModels($where: custom_models_bool_exp = {}, $limit: Int, $offset: Int) {
   custom_models(where: $where, limit: $limit, offset: $offset, order_by: [{createdAt: desc}]) {
-    id name type sdVersion public status
-    user { username __typename }
-    __typename
+    id name type sdVersion public status __typename
   }
 }`,
-		},
-		{
-			OperationName: "GetFeedModelsMinimal",
-			Variables: map[string]any{
-				"where": map[string]any{
-					"public": map[string]any{"_eq": true},
-					"status": map[string]any{"_eq": "COMPLETE"},
-				},
-				"limit":  200,
-				"offset": 0,
-			},
-			Query: `query GetFeedModelsMinimal($where: custom_models_bool_exp = {}, $limit: Int, $offset: Int) {
-  custom_models(where: $where, limit: $limit, offset: $offset, order_by: [{createdAt: desc}]) {
-    id name type sdVersion __typename
-  }
-}`,
-		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("leonardo: fetch official models: %w", err)
 	}
 
-	var lastError string
-	for _, op := range queries {
-		resp, err := c.gql(token, op)
-		if err != nil {
-			lastError = err.Error()
+	data, _ := resp["data"].(map[string]any)
+	raw, _ := data["custom_models"].([]any)
+	if len(raw) == 0 {
+		if msg := GraphQLErrorMessage(resp); msg != "" {
+			return nil, fmt.Errorf("leonardo: fetch official models: %s", msg)
+		}
+		return nil, fmt.Errorf("leonardo: fetch official models: no models returned")
+	}
+
+	out := make([]CustomModelEntry, 0, len(raw))
+	for _, item := range raw {
+		obj, _ := item.(map[string]any)
+		if obj == nil {
 			continue
 		}
-		data, _ := resp["data"].(map[string]any)
-		raw, _ := data["custom_models"].([]any)
-		if len(raw) == 0 {
-			if msg := GraphQLErrorMessage(resp); msg != "" {
-				lastError = msg
-			}
+		id, _ := obj["id"].(string)
+		if id == "" {
 			continue
 		}
-
-		out := make([]CustomModelEntry, 0, len(raw))
-		for _, item := range raw {
-			obj, _ := item.(map[string]any)
-			if obj == nil {
-				continue
-			}
-			// Filter to official Leonardo models only. Unknown user shape
-			// (minimal query) is treated as official to avoid losing rows.
-			if userObj, ok := obj["user"].(map[string]any); ok {
-				if u, _ := userObj["username"].(string); u != "" && u != "Leonardo" {
-					continue
-				}
-			}
-
-			id, _ := obj["id"].(string)
-			if id == "" {
-				continue
-			}
-			name, _ := obj["name"].(string)
-			sd, _ := obj["sdVersion"].(string)
-			mtype, _ := obj["type"].(string)
-			out = append(out, CustomModelEntry{
-				ID:        id,
-				Name:      name,
-				SDVersion: sd,
-				Type:      mtype,
-			})
-		}
-		if len(out) > 0 {
-			return out, nil
-		}
+		name, _ := obj["name"].(string)
+		sd, _ := obj["sdVersion"].(string)
+		mtype, _ := obj["type"].(string)
+		out = append(out, CustomModelEntry{
+			ID:        id,
+			Name:      name,
+			SDVersion: sd,
+			Type:      mtype,
+		})
 	}
-
-	if lastError == "" {
-		lastError = "no models returned by Leonardo"
-	}
-	return nil, fmt.Errorf("leonardo: fetch official models: %s", lastError)
+	return out, nil
 }

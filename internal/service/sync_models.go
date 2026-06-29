@@ -82,5 +82,20 @@ func (p *LeonardoPool) SyncImageModels() (ModelSyncResult, error) {
 		}
 	}
 
+	// Purge stale models that Leonardo no longer returns.
+	keepIDs := make([]string, 0, len(models))
+	for _, m := range models {
+		if id := strings.TrimSpace(m.ID); id != "" {
+			keepIDs = append(keepIDs, id)
+		}
+	}
+	// Safety guard: don't wipe the model table if the API returns
+	// an unexpectedly small set (e.g. a broken query or auth failure).
+	if len(keepIDs) >= 10 {
+		if err := p.store.DeleteModelsNotIn(keepIDs); err != nil {
+			return res, fmt.Errorf("service: purge stale models: %w", err)
+		}
+	}
+
 	return res, nil
 }
