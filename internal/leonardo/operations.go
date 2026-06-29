@@ -724,8 +724,12 @@ func (c *Client) FetchOfficialImageModels(token string) ([]CustomModelEntry, err
 		if sd == "" {
 			continue
 		}
-		// Skip community fine-tune models (generic SD version strings).
-		if sd == "v1_5" || sd == "v2" {
+		// Skip deprecated/community models — these are not on the current website.
+		// Community finetunes use generic versions; old Leonardo models use legacy SDVersions.
+		if sd == "v1_5" || sd == "v2" ||
+			sd == "SDXL_0_9" || sd == "SDXL_1_0" || sd == "SDXL_LIGHTNING" ||
+			sd == "RECRAFT_V4_PRO" || sd == "IDEOGRAM_3" ||
+			sd == "GEMINI_2_5_FLASH" || sd == "FLUX_MAX" || sd == "FLUX_DEV_2_0" {
 			continue
 		}
 		out = append(out, CustomModelEntry{
