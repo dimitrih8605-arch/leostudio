@@ -417,8 +417,9 @@ func resolveStyleID(style string) string {
 // resolveModelSlug converts a display name, UUID, or SDVersion to a Leonardo GraphQL slug.
 // Falls back to "nano-banana-2" if no mapping found.
 func resolveModelSlug(modelID, sdVersion string) string {
-	// If it's already a slug (contains no spaces, lowercase with hyphens), use as-is
-	if strings.Contains(modelID, "-") && !strings.Contains(modelID, " ") {
+	// If it's already a slug (no spaces, lowercase with hyphens), use as-is.
+	// UUIDs also contain hyphens but are 36 chars — skip them.
+	if len(modelID) < 30 && strings.Contains(modelID, "-") && !strings.Contains(modelID, " ") {
 		return modelID
 	}
 	// Try display name lookup (case-insensitive)
@@ -517,7 +518,7 @@ func (c *Client) CreateGeneration(token string, in GenerateInput) (string, error
 		OperationName: "Generate",
 		Variables: map[string]any{
 			"request": map[string]any{
-				"model":      "nano-banana-2",
+				"model":      resolveModelSlug(in.ModelID, in.SDVersion),
 				"parameters": params,
 				"public":     true,
 			},
