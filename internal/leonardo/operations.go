@@ -675,8 +675,8 @@ type CustomModelEntry struct {
 	Type      string
 }
 
-// FetchOfficialImageModels returns Leonardo's official GENERATE-type image
-// models via the custom_models GraphQL endpoint.
+// FetchOfficialImageModels returns Leonardo's image models via the
+// custom_models GraphQL endpoint. Video models (no sdVersion) are filtered out.
 func (c *Client) FetchOfficialImageModels(token string) ([]CustomModelEntry, error) {
 	resp, err := c.gql(token, gqlPayload{
 		OperationName: "GetFeedModels",
@@ -684,7 +684,6 @@ func (c *Client) FetchOfficialImageModels(token string) ([]CustomModelEntry, err
 			"where": map[string]any{
 				"public": map[string]any{"_eq": true},
 				"status": map[string]any{"_eq": "COMPLETE"},
-				"type":   map[string]any{"_eq": "GENERATE"},
 			},
 			"limit":  200,
 			"offset": 0,
@@ -721,6 +720,14 @@ func (c *Client) FetchOfficialImageModels(token string) ([]CustomModelEntry, err
 		name, _ := obj["name"].(string)
 		sd, _ := obj["sdVersion"].(string)
 		mtype, _ := obj["type"].(string)
+		// Skip video models — they have no sdVersion and aren't image models.
+		if sd == "" {
+			continue
+		}
+		// Skip community fine-tune models (generic SD version strings).
+		if sd == "v1_5" || sd == "v2" {
+			continue
+		}
 		out = append(out, CustomModelEntry{
 			ID:        id,
 			Name:      name,

@@ -34,6 +34,7 @@ export function GenerateImagePage() {
   const [modelId, setModelId] = useState<string>("");
   const [aspect, setAspect] = useState<string>("1:1");
   const [n, setN] = useState(1);
+  const [style, setStyle] = useState<string>("Dynamic");
   const [refs, setRefs] = useState<DroppedImage[]>([]);
 
   const [generating, setGenerating] = useState(false);
@@ -93,6 +94,7 @@ export function GenerateImagePage() {
         modelId: modelId || undefined,
         n,
         aspectRatio: aspect,
+        style: style === "Dynamic" ? undefined : style,
         referenceImageURLs: refs
           .filter((r) => r.source === "url" && r.url)
           .map((r) => r.url as string),
@@ -150,7 +152,6 @@ export function GenerateImagePage() {
               spellCheck={false}
             />
           </Field>
-
           <div className="grid grid-cols-2 gap-3">
             <Field label="Model">
               <Select
@@ -179,6 +180,26 @@ export function GenerateImagePage() {
               </Select>
             </Field>
           </div>
+
+          {(() => {
+            const m = models.find((m) => m.modelId === modelId);
+            const hideStyle = m && (m.sdVersion === "IDEOGRAM_4" || m.sdVersion === "RECRAFT_V4");
+            if (hideStyle) return null;
+            return (
+              <Field label="Style">
+                <Select value={style} onChange={(e) => setStyle(e.target.value)}>
+                  <option value="Dynamic">Dynamic</option>
+                  <option value="Cinematic">Cinematic</option>
+                  <option value="Creative">Creative</option>
+                  <option value="Fashion">Fashion</option>
+                  <option value="Portrait">Portrait</option>
+                  <option value="Stock Photo">Stock Photo</option>
+                  <option value="Vibrant">Vibrant</option>
+                  <option value="None">None</option>
+                </Select>
+              </Field>
+            );
+          })()}
 
           <Field label={`Quantity · ${n}`}>
             <Slider

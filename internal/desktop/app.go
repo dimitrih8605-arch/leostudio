@@ -8,11 +8,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-
+	"time"
 	"github.com/hirotomasato/leostudio/internal/leonardo"
 	"github.com/hirotomasato/leostudio/internal/service"
 	"github.com/hirotomasato/leostudio/internal/store"
@@ -78,6 +80,12 @@ func (a *App) Startup(ctx context.Context) {
 		a.queue.Start()
 		go func() { _ = a.queue.ResumeFromStore() }()
 	}
+
+	// Background cookie refresh: proactively resolve fresh JWTs from
+	// better-auth sessions before the current one expires (~1h TTL).
+	// Runs every 45 minutes. Catches the common case where the JWT
+	// expires but the better-auth session cookie is still valid.
+	go a.startBackgroundRefresh()
 
 	// Best-effort first-run sync: if the user already added cookies but the
 	// models table is empty, populate it from Leonardo so Generate Image is
@@ -314,7 +322,8 @@ type ImageGenerateRequest struct {
 	N                   int      `json:"n"`
 	AspectRatio         string   `json:"aspectRatio"`
 	ReferenceImageURLs  []string `json:"referenceImageURLs"`
-	ReferenceImageIDs   []string `json:"referenceImageIds"` // pre-uploaded ids
+	ReferenceImageIDs   []string `json:"referenceImageIds"`
+	Style               string   `json:"style"`
 }
 
 // GenerateImage delegates to LeonardoPool.Generate. The frontend gets back
@@ -351,6 +360,7 @@ func (a *App) GenerateImage(req ImageGenerateRequest) (*service.GenerateResponse
 		AspectRatio:        aspect,
 		ReferenceImageURLs: req.ReferenceImageURLs,
 		ReferenceImageIDs:  req.ReferenceImageIDs,
+		Style:              req.Style,
 	})
 	if err != nil {
 		log.Printf("[generate.image] error: %v", err)
@@ -405,6 +415,53 @@ func (a *App) emitCookiesChanged() {
 		return
 	}
 	wailsruntime.EventsEmit(a.ctx, "cookies:changed")
+}
+
+// startBackgroundRefresh periodically refreshes cookie sessions to keep JWTs
+// alive. Leonardo JWTs expire in ~1h; better-auth session cookies typically
+// outlive them by hours/days. By refreshing every 45 min we stay well under
+// the expiry window. On failure, tries CDP auto-catch from Chrome as a
+// fallback (best-effort — only works when Chrome has an active session).
+func (a *App) startBackgroundRefresh() {
+	// Initial delay so the app can finish startup first.
+	time.Sleep(10 * time.Minute)
+	ticker := time.NewTicker(45 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		log.Printf("[auto-refresh] starting periodic cookie session refresh")
+		res, err := a.service.RefreshCookieSessions()
+		if err != nil {
+			log.Printf("[auto-refresh] refresh failed: %v", err)
+		} else {
+			log.Printf("[auto-refresh] checked=%d ok=%d", res.Checked, res.OK)
+		}
+		if res.OK > 0 {
+			a.emitCookiesChanged()
+		}
+		// Best-effort CDP auto-catch: if any cookies failed, try to grab
+		// fresh ones from Chrome. Runs inline — import_server.py must be
+		// started separately for this to work.
+		if res.Checked > res.OK {
+			go a.tryCDPAutoCatch()
+		}
+	}
+}
+
+// tryCDPAutoCatch calls the import server's /auto-refresh endpoint which
+// grabs fresh cookies from Chrome CDP. Best-effort: logs and moves on if
+// the import server isn't running or Chrome has no Leonardo session.
+func (a *App) tryCDPAutoCatch() {
+	resp, err := http.Get("http://127.0.0.1:8001/auto-refresh")
+	if err != nil {
+		log.Printf("[auto-refresh] CDP catch skipped (import server offline): %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("[auto-refresh] CDP catch result (status=%d): %s", resp.StatusCode, string(body))
+	if resp.StatusCode == 200 {
+		a.emitCookiesChanged()
+	}
 }
 
 // ----- Generation queue ----------------------------------------------------

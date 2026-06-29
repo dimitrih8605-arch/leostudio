@@ -81,6 +81,7 @@ export type ImageGenerateRequest = {
   modelId?: string;
   n?: number;
   aspectRatio?: string;
+  style?: string;
   referenceImageURLs?: string[];
   referenceImageIds?: string[];
 };
