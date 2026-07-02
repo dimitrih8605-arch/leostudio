@@ -60,6 +60,7 @@ type GenerateRequest struct {
 	ReferenceImageURLs  []string
 	ReferenceImageIDs   []string // pre-uploaded init image ids; merged with ReferenceImageURLs results
 	SaveResults         *bool    // nil = follow auto_save_images setting
+	Style               string   // style name or UUID, empty = default (Dynamic)
 }
 
 // GenerateResponse mirrors the OpenAI-compatible response shape.
@@ -204,6 +205,7 @@ func (p *LeonardoPool) Generate(req GenerateRequest) (*GenerateResponse, error) 
 				Quantity:     quantity,
 				InitImageIDs: initImageIDs,
 				SDVersion:    sdVersion,
+				StyleID:      req.Style,
 			})
 			if err != nil {
 				if isAuthError(err.Error()) && attempt == 0 {
@@ -216,7 +218,9 @@ func (p *LeonardoPool) Generate(req GenerateRequest) (*GenerateResponse, error) 
 				break
 			}
 
-			result := p.api.WaitForCompletion(token, genID, 300*time.Second, 4*time.Second)
+			// ponytail: re-resolve token mid-poll when JWT expires during long generations
+			refreshFn := func() string { return p.resolveToken(cookie.Value) }
+			result := p.api.WaitForCompletion(token, genID, 300*time.Second, 4*time.Second, refreshFn)
 			if !result.Success {
 				if isAuthError(result.Error) && attempt == 0 {
 					continue

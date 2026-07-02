@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "LeoStudio Cookie Export",
+  "version": "1.0",
+  "description": "Export Leonardo AI cookies to LeoStudio",
+  "permissions": ["cookies"],
+  "host_permissions": [
+    "https://app.leonardo.ai/*",
+    "http://127.0.0.1:8001/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Export to LeoStudio"
+  }
+}

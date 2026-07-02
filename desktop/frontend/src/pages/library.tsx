@@ -9,6 +9,7 @@ import {
   Play,
   Pause,
   Maximize2,
+  RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,6 +55,21 @@ export function LibraryPage({ onNavigate }: { onNavigate: (id: NavId) => void })
     void reload();
   });
 
+  // Manual refresh via topbar button.
+  useEffect(() => {
+    const handler = () => void reload();
+    window.addEventListener("library:refresh", handler);
+    return () => window.removeEventListener("library:refresh", handler);
+  }, [reload]);
+
+  // Periodic poll so library stays fresh even when events are missed.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) void reload();
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [reload]);
+
   const onReplayLog = (log: GenerationLog) => {
     const target = isVideoLog(log) ? "video" : "image";
     setReplay({
@@ -94,6 +110,14 @@ export function LibraryPage({ onNavigate }: { onNavigate: (id: NavId) => void })
   return (
     <div className="h-full overflow-y-auto">
       <div className="space-y-4 p-6">
+        <Button
+          onClick={() => void reload()}
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+          size="lg"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Refresh Library
+        </Button>
         <FilterBar
           search={search}
           onSearch={setSearch}
